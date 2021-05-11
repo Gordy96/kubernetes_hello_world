@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option go_package = "goinv/infrastructure/protobuf";
+
+package goinv;
+
+service Downloader {
+    rpc Download (DownloadRequest) returns (DownloadReply) {}
+}
+message DownloadRequest {
+    string url = 1;
+}
+message DownloadReply {
+    enum Status {
+        OK = 0;
+        FAILED = 1;
+    }
+    Status status = 1;
+    string filename = 2;
+}

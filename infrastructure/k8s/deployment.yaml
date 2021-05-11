@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: task-manager-configmap
+data:
+  downloader_host: downloader
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: downloader
+  labels:
+    app: downloader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: downloader
+  template:
+    metadata:
+      labels:
+        app: downloader
+    spec:
+      containers:
+        - name: downloader
+          image: downloader
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 50051
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: downloader
+spec:
+  selector:
+    app: downloader
+  ports:
+    - protocol: TCP
+      port: 50051
+      targetPort: 50051
+      name: grpc
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: file-server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-manager
+  labels:
+    app: task-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: task-manager
+  template:
+    metadata:
+      labels:
+        app: task-manager
+    spec:
+      containers:
+      - name: task-manager
+        image: task_manager
+        imagePullPolicy: Never
+        ports:
+          - containerPort: 8000
+        env:
+          - name: DOWNLOADER_HOST
+            valueFrom: 
+              configMapKeyRef:
+                name: task-manager-configmap
+                key: downloader_host
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: task-manager
+spec:
+  selector:
+    app: task-manager
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-balancer
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    #nginx.ingress.kubernetes.io/rewrite-target: "/"
+spec:
+  rules:
+    - host: kube.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              serviceName: task-manager
+              servicePort: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              serviceName: downloader
+              servicePort: 8080
